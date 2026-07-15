@@ -729,6 +729,17 @@ path.cell-picked {
   font-family: var(--display); font-size: 1rem; letter-spacing: 0.09em; text-transform: uppercase;
 }
 .contact-btn:hover { border-color: var(--gold); background: rgba(232, 182, 76, 0.08); }
+.install-hint { margin-top: 1.15rem; border-top: 1px solid var(--edge); padding-top: 0.85rem; }
+.install-hint summary {
+  cursor: pointer; color: var(--gold); font-size: 0.82rem; letter-spacing: 0.04em;
+  list-style-position: inside;
+}
+.install-hint summary:hover { color: var(--gold-bright); }
+.install-hint p, .install-hint li { color: var(--muted); font-size: 0.8rem; line-height: 1.55; }
+.install-hint p { margin: 0.55rem 0 0.3rem; }
+.install-hint ul { margin: 0.2rem 0 0; padding-left: 1.15rem; }
+.install-hint li { margin: 0.3rem 0; }
+.install-hint b { color: var(--text); }
 .auth-about { text-align: center; font-size: 0.8rem; margin: -0.7rem 0 1.1rem; }
 .auth-about a { color: var(--gold); text-decoration: none; border-bottom: 1px solid var(--gold-dim); }
 .auth-about a:hover { border-bottom-color: var(--gold); }

@@ -37,6 +37,15 @@
     </form>
     <p class="auth-alt">{{ t('auth_new') }} <a href="/register">{{ t('auth_register_link') }}</a></p>
     {% endif %}
+
+    <details class="install-hint">
+      <summary>{{ t('install_head') }}</summary>
+      <p>{{ t('install_what') }}</p>
+      <ul>
+        <li>{{ t('install_android') | safe }}</li>
+        <li>{{ t('install_ios') | safe }}</li>
+      </ul>
+    </details>
   </div>
 </div>
 {% endblock %}
