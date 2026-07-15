@@ -16,6 +16,9 @@ MASTER_KEY_PATH = DATA_DIR / "master.key"
 MAX_USERS = int(os.environ.get("WARROOM_MAX_USERS", "30"))
 CONTACT_MAIL = "st4bleground@proton.me"
 
+# Anzeige-Zeitzone: SQLite speichert UTC, die UI zeigt Wandzeit dieser Zone.
+TZ = os.environ.get("WARROOM_TZ", "Europe/Berlin")
+
 # member-territories wird serverseitig nur alle 5 min per Cron neu berechnet.
 POLL_SECONDS = 300
 # Footprint (eigene APs) je User seltener voll neu einlesen.

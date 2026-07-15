@@ -187,7 +187,7 @@
       <div><span>{{ t('info_points') }}</span><b>{{ (stats.gang_points if stats else 0) | n }}</b></div>
       <div><span>{{ t('info_team_cl') }}</span><b>{{ (stats.team_captured if stats else 0) | n }} / {{ (stats.team_lost if stats else 0) | n }}</b></div>
       <div><span>{{ t('info_turf') }}</span><b>{{ meta.footprint_cells }} {{ t('cells_word') }}</b></div>
-      <div><span>{{ t('info_last_poll') }}</span><b>{{ meta.last_poll }}</b></div>
+      <div><span>{{ t('info_last_poll') }}</span><b>{{ meta.last_poll | localtime }}</b></div>
       <div><span>{{ t('info_users') }}</span><b>{{ user_count }} / {{ max_users }}</b></div>
     </div>
     <h3 class="pl-sub">{{ t('chart_head') }}</h3>

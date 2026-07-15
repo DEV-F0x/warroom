@@ -28,7 +28,7 @@
       {%- elif e.kind == 'captured' %} {{ t('ev_captured_txt', g=((e.old_gang or t('nobody')) | e)) | safe }}
       {%- elif e.kind == 'flipped' %} {{ t('ev_flipped_txt', a=(e.old_gang | e), b=(e.new_gang | e)) | safe }}
       {%- else %} {{ (e.new_gang or e.old_gang) | e }}{% endif %}
-      · {{ e.ts }}
+      · {{ e.ts | localtime }}
     </div>
   </li>
   {% endfor %}

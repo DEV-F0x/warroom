@@ -1,5 +1,7 @@
 """Jinja-Setup + i18n-Kontext + Anzeige-Helfer."""
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -33,7 +35,17 @@ def fmt_n(v):
         return v if v is not None else "—"
 
 
+def fmt_local(v):
+    """DB-Zeitstempel (UTC, 'YYYY-MM-DD HH:MM:SS') → Wandzeit in config.TZ."""
+    try:
+        dt = datetime.fromisoformat(str(v)).replace(tzinfo=timezone.utc)
+        return dt.astimezone(ZoneInfo(config.TZ)).strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError, ZoneInfoNotFoundError):
+        return v if v is not None else "—"
+
+
 templates.env.filters["n"] = fmt_n
+templates.env.filters["localtime"] = fmt_local
 
 
 def lang_of(request: Request) -> str:
