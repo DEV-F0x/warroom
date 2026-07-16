@@ -9,7 +9,7 @@ import time
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import auth, config, db, grid, push
+from . import auth, config, db, grid, push, queries, roads
 from .wdg import Wdg, WdgError
 
 log = logging.getLogger("warroom.poller")
@@ -17,6 +17,73 @@ log = logging.getLogger("warroom.poller")
 # Serializes team/me fetches across poll workers: without it, two users of the
 # same gang polled concurrently would each fetch team/me (wasted upstream calls).
 _team_lock = threading.Lock()
+
+# Only one background road-snap drip at a time — a slow Overpass run (mirrors can
+# take 40 s+ per batch when they time out) must never stack up across cycles.
+_drip_lock = threading.Lock()
+
+
+def drip_snap(conn, budget: int) -> int:
+    """Classify up to `budget` not-yet-snapped virgin cells against Overpass.
+
+    The on-load client snap only covers the ~120 cells nearest the turf centres —
+    for players with thousands of virgin cells (Nova Scotia coastline), water cells
+    beyond that window stayed in the tour/target list. This drip works through the
+    backlog server-side: nearest-to-turf first, round-robin across users so one
+    whale can't starve everyone else. found=0/1 is cached forever in cell_roads,
+    so queries.virgin_cells() filters water at the source once a cell is done;
+    failed Overpass batches simply stay unclassified and are retried next cycle."""
+    per_user: list[list[tuple[int, int]]] = []
+    for u in conn.execute("SELECT DISTINCT user_id FROM virgin_cells").fetchall():
+        uid = u["user_id"]
+        rows = conn.execute(
+            """SELECT v.i, v.j, v.lat, v.lng FROM virgin_cells v
+               LEFT JOIN cell_roads r ON r.cell_key = v.cell_key
+               WHERE v.user_id = ? AND r.cell_key IS NULL""", (uid,)).fetchall()
+        cells = [(r["i"], r["j"], r["lat"], r["lng"]) for r in rows]
+        centers = queries._theatre_centers(conn, uid)
+        if centers:
+            cells.sort(key=lambda c: min((c[2] - a) ** 2 + (c[3] - b) ** 2
+                                         for a, b in centers))
+        per_user.append([(c[0], c[1]) for c in cells])
+    batch: list[tuple[int, int]] = []
+    seen: set[str] = set()
+    while len(batch) < budget and any(per_user):
+        for lst in per_user:
+            if not lst:
+                continue
+            i, j = lst.pop(0)
+            k = grid.key_from_index(i, j)
+            if k not in seen:
+                seen.add(k)
+                batch.append((i, j))
+                if len(batch) >= budget:
+                    break
+    if not batch:
+        return 0
+    return len(roads.snap_cells(conn, batch))
+
+
+def drip_snap_async() -> None:
+    """Fire the drip on its own daemon thread; skip if the previous one still runs."""
+    if not _drip_lock.acquire(blocking=False):
+        return
+
+    def _run():
+        try:
+            conn = db.connect()
+            try:
+                n = drip_snap(conn, config.ROAD_DRIP)
+                if n:
+                    log.info("Road-Drip: %d Zellen klassifiziert", n)
+            finally:
+                conn.close()
+        except Exception:
+            log.exception("Road-Drip fehlgeschlagen")
+        finally:
+            _drip_lock.release()
+
+    threading.Thread(target=_run, daemon=True, name="road-drip").start()
 
 
 def _num(x):
@@ -336,5 +403,8 @@ def poll_all(conn) -> dict:
             except Exception:
                 log.exception("poll für %s fehlgeschlagen", u["wdg_username"])
     db.kv_set(conn, "last_poll", time.time())
+    # Kick the background road classification AFTER the cycle's data is in —
+    # it runs detached and never delays the next poll.
+    drip_snap_async()
     return {"users": len(users), "global_cells": len(cells), "events": total_events,
             "workers": workers, "secs": round(time.monotonic() - t0, 1)}
