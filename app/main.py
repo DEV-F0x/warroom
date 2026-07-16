@@ -23,6 +23,7 @@ log = logging.getLogger("warroom")
 
 async def poll_loop():
     while True:
+        t0 = time.monotonic()
         try:
             conn = db.connect()
             try:
@@ -31,7 +32,10 @@ async def poll_loop():
                 conn.close()
         except Exception:
             log.exception("poll loop failed")
-        await asyncio.sleep(config.POLL_SECONDS)
+        # Sleep the REMAINDER of the interval, not a full POLL_SECONDS on top of the
+        # cycle — otherwise the effective cadence is cycle_time + POLL_SECONDS (was
+        # ~8 min instead of 5). At least 1 s so a >5 min cycle can't spin hot.
+        await asyncio.sleep(max(1.0, config.POLL_SECONDS - (time.monotonic() - t0)))
 
 
 @asynccontextmanager

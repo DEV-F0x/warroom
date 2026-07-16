@@ -123,17 +123,23 @@ def diff_territory(conn, lookup: dict, glat, glng, user_id: int, my_gid,
     events = 0
     for k, n in new.items():
         p = old.get(k)
-        conn.execute(
-            """INSERT INTO territory (user_id, cell_key, i, j, lat, lng, gang_id, gang,
-                     owner_user_id, count, color, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
-               ON CONFLICT(user_id, cell_key) DO UPDATE SET
-                 gang_id=excluded.gang_id, gang=excluded.gang,
-                 owner_user_id=excluded.owner_user_id, count=excluded.count,
-                 color=excluded.color, updated_at=excluded.updated_at""",
-            (user_id, k, n["i"], n["j"], n["lat"], n["lng"], n["gid"], n["gang"],
-             n["uid"], n["count"], n["color"]),
-        )
+        # Only write when the cell is new or its owner data actually changed. In
+        # autocommit mode each cell is its own commit, so rewriting an unchanged turf
+        # (tens of thousands of cells for big players) every cycle was the dominant
+        # cost — in steady state almost nothing changes, so almost nothing is written.
+        if p is None or (_num(p["gang_id"]) != n["gid"] or p["count"] != n["count"]
+                         or p["color"] != n["color"] or _num(p["owner_user_id"]) != n["uid"]):
+            conn.execute(
+                """INSERT INTO territory (user_id, cell_key, i, j, lat, lng, gang_id, gang,
+                         owner_user_id, count, color, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+                   ON CONFLICT(user_id, cell_key) DO UPDATE SET
+                     gang_id=excluded.gang_id, gang=excluded.gang,
+                     owner_user_id=excluded.owner_user_id, count=excluded.count,
+                     color=excluded.color, updated_at=excluded.updated_at""",
+                (user_id, k, n["i"], n["j"], n["lat"], n["lng"], n["gid"], n["gang"],
+                 n["uid"], n["count"], n["color"]),
+            )
         if initialized and p:
             prev_gid, cur_gid = _num(p["gang_id"]), n["gid"]
             kind = _classify(prev_gid, cur_gid, my_gid)
@@ -160,15 +166,19 @@ def diff_territory(conn, lookup: dict, glat, glng, user_id: int, my_gid,
     # Virgin ground: within the ring but in NO feed — nobody has ever been there.
     # (new contains all occupied cells of the ring + my own footprint cells.)
     virgin = [(i, j) for (i, j) in turf if grid.key_from_index(i, j) not in new]
-    conn.execute("DELETE FROM virgin_cells WHERE user_id = ?", (user_id,))
-    if virgin:
-        rows = []
-        for (i, j) in virgin:
-            cla, clo = grid.center(i, j, glat, glng)
-            rows.append((user_id, grid.key_from_index(i, j), i, j, cla, clo))
-        conn.executemany(
-            "INSERT INTO virgin_cells (user_id, cell_key, i, j, lat, lng) VALUES (?,?,?,?,?,?)",
-            rows)
+    # Only rewrite when the virgin set changed (rare) — a read is cheap under WAL,
+    # a full delete+reinsert of thousands of rows every cycle is not.
+    new_vkeys = {grid.key_from_index(i, j) for (i, j) in virgin}
+    cur_vkeys = {r["cell_key"] for r in conn.execute(
+        "SELECT cell_key FROM virgin_cells WHERE user_id = ?", (user_id,))}
+    if new_vkeys != cur_vkeys:
+        conn.execute("DELETE FROM virgin_cells WHERE user_id = ?", (user_id,))
+        if virgin:
+            rows = [(user_id, grid.key_from_index(i, j), i, j,
+                     *grid.center(i, j, glat, glng)) for (i, j) in virgin]
+            conn.executemany(
+                "INSERT INTO virgin_cells (user_id, cell_key, i, j, lat, lng) VALUES (?,?,?,?,?,?)",
+                rows)
 
     # remove cells that are no longer within the turf from territory
     stale = [k for k in old if k not in new]
