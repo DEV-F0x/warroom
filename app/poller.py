@@ -64,12 +64,13 @@ def drip_snap(conn, budget: int) -> int:
     # Fan the batch out over DRIP_WORKERS threads, each leading with a different
     # Overpass mirror (shift) — 3× throughput and the load spreads across the
     # instances instead of queueing behind whichever one is flaky right now.
-    chunks = [batch[x:x + roads.BATCH] for x in range(0, len(batch), roads.BATCH)]
+    chunks = [batch[x:x + roads.DRIP_BATCH]
+              for x in range(0, len(batch), roads.DRIP_BATCH)]
 
     def _work(ci: int, chunk: list) -> int:
         wconn = db.connect()
         try:
-            return len(roads.snap_cells(wconn, chunk, shift=ci))
+            return len(roads.snap_cells(wconn, chunk, shift=ci, batch=roads.DRIP_BATCH))
         finally:
             wconn.close()
 

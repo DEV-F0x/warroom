@@ -30,18 +30,25 @@ OVERPASS_MIRRORS = (
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 )
-BATCH = 8           # cells per request
-TIMEOUT = 30
+BATCH = 8           # cells per request (interactive /api/snap path)
+DRIP_BATCH = 16     # cells per request for the background drip — under mirror
+                    # overload the queue slot is the scarce resource, so fewer,
+                    # larger queries beat many small ones.
+# Healthy responses arrive in 1-4 s; a mirror that is silent for 15 s is not
+# going to answer. Failing fast matters: a full mirror cascade used to burn
+# ~2 min per failed batch, which dominated drip throughput on flaky days.
+TIMEOUT = 15
 
 # Drivable only: no foot/cycle paths, stairs, dirt trails.
 DRIVABLE = ("motorway|trunk|primary|secondary|tertiary|unclassified|residential"
             "|living_street|service|motorway_link|trunk_link|primary_link"
             "|secondary_link|tertiary_link|road")
-# Fallback pass before declaring a cell roadless: highway=track (gravel/forestry
-# roads). In rural Nova Scotia these are perfectly wardrivable — a diagnostic run
-# showed real land cells being cut as "water" because track was excluded. The
-# snap point still PREFERS proper roads; track only decides land vs. water.
+# Land-vs-water fallback: highway=track (gravel/forestry roads). In rural Nova
+# Scotia these are perfectly wardrivable — a diagnostic run showed real land
+# cells being cut as "water" because track was excluded. The snap point still
+# PREFERS proper roads; track only decides that the cell is not roadless.
 FALLBACK = "track"
+_DRIV_SET = frozenset(DRIVABLE.split("|"))
 
 
 def _grid(conn) -> tuple[float, float]:
@@ -62,9 +69,10 @@ def _query(bboxes: list[tuple[float, float, float, float]],
     parts = "".join(
         f'way["highway"~"^({types})$"]({s:.6f},{w:.6f},{n:.6f},{e:.6f});'
         for (s, w, n, e) in bboxes)
-    # `skel` = without tags: we only need the vertex points. In a city that quickly
-    # means thousands of ways — with tags the response would be many times larger.
-    ql = f"[out:json][timeout:{TIMEOUT}];({parts});out skel geom;"
+    # `out geom` keeps the tags: drivable and track come back in ONE query and are
+    # told apart locally, so classification costs a single round trip per chunk.
+    # (Tags add some payload over `skel`, but round trips are the bottleneck.)
+    ql = f"[out:json][timeout:{TIMEOUT}];({parts});out geom;"
     data = urllib.parse.urlencode({"data": ql}).encode()
     last = None
     # shift rotates the mirror order so parallel drip workers each lead with a
@@ -84,12 +92,16 @@ def _query(bboxes: list[tuple[float, float, float, float]],
     raise OSError(f"alle Overpass-Instanzen fehlgeschlagen: {last}")
 
 
-def _nearest_in_cell(ways: list[dict], s, w, n, e, clat, clng):
-    """Nearest road vertex to the cell centre — but only points INSIDE the cell."""
+def _nearest_in_cell(ways: list[dict], s, w, n, e, clat, clng,
+                     types: frozenset | None = None):
+    """Nearest road vertex to the cell centre — but only points INSIDE the cell.
+    With `types`, only ways whose highway tag is in the set are considered."""
     best = None
     best_d = float("inf")
     coslat = math.cos(math.radians(clat))
     for el in ways:
+        if types is not None and (el.get("tags") or {}).get("highway") not in types:
+            continue
         for p in el.get("geometry") or []:
             la, lo = p.get("lat"), p.get("lon")
             if la is None or lo is None:
@@ -105,8 +117,8 @@ def _nearest_in_cell(ways: list[dict], s, w, n, e, clat, clng):
     return best
 
 
-def snap_cells(conn, cells: list[tuple[int, int]],
-               shift: int = 0) -> dict[str, list | None]:
+def snap_cells(conn, cells: list[tuple[int, int]], shift: int = 0,
+               batch: int = BATCH) -> dict[str, list | None]:
     """cell_key → [lat, lng] on the road, or None if there verifiably is none there.
 
     Cells whose query failed are MISSING from the result — the caller must ask
@@ -128,15 +140,17 @@ def snap_cells(conn, cells: list[tuple[int, int]],
         else:
             todo.append((i, j))
 
-    for start in range(0, len(todo), BATCH):
-        chunk = todo[start:start + BATCH]
+    for start in range(0, len(todo), batch):
+        chunk = todo[start:start + batch]
         boxes = []
         for (i, j) in chunk:
             (s, w), (n, e) = grid.bounds(i, j, glat, glng)
             boxes.append((s, w, n, e))
         t0 = time.monotonic()
         try:
-            ways = _query(boxes, shift=shift)
+            # ONE query for drivable roads AND track — the preference between them
+            # is decided locally, so no second round trip per chunk.
+            ways = _query(boxes, f"{DRIVABLE}|{FALLBACK}", shift=shift)
             log.info("Overpass: %d Zellen, %d Wege, %.1f s",
                      len(chunk), len(ways), time.monotonic() - t0)
         except (urllib.error.URLError, TimeoutError, ValueError, OSError) as ex:
@@ -148,11 +162,13 @@ def snap_cells(conn, cells: list[tuple[int, int]],
                         ex, len(chunk))
             continue
 
-        missed: list[int] = []
         for idx, (i, j) in enumerate(chunk):
             s, w, n, e = boxes[idx]
             clat, clng = grid.center(i, j, glat, glng)
-            hit = _nearest_in_cell(ways, s, w, n, e, clat, clng)
+            # Snap point prefers a proper road; a track still proves the cell is
+            # land. Only a cell with neither is cached as roadless.
+            hit = (_nearest_in_cell(ways, s, w, n, e, clat, clng, _DRIV_SET)
+                   or _nearest_in_cell(ways, s, w, n, e, clat, clng))
             k = grid.key_from_index(i, j)
             if hit:
                 conn.execute(
@@ -160,35 +176,9 @@ def snap_cells(conn, cells: list[tuple[int, int]],
                     "VALUES (?,?,?,1)", (k, hit[0], hit[1]))
                 out[k] = [hit[0], hit[1]]
             else:
-                missed.append(idx)
-
-        # Second pass for the misses only: a track (gravel/forestry road) still
-        # counts as land. Only cells that miss BOTH passes are cached as roadless.
-        # The majority of cells hit in pass one, so this stays cheap.
-        if missed:
-            try:
-                tways = _query([boxes[idx] for idx in missed], FALLBACK, shift=shift)
-            except (urllib.error.URLError, TimeoutError, ValueError, OSError) as ex:
-                # Same rule as above: a failed query is NOT a finding — leave the
-                # missed cells unclassified instead of branding them roadless.
-                log.warning("Overpass (track-Pass) nicht erreichbar (%s) — "
-                            "%d Zellen bleiben offen", ex, len(missed))
-                continue
-            for idx in missed:
-                i, j = chunk[idx]
-                s, w, n, e = boxes[idx]
-                clat, clng = grid.center(i, j, glat, glng)
-                hit = _nearest_in_cell(tways, s, w, n, e, clat, clng)
-                k = grid.key_from_index(i, j)
-                if hit:
-                    conn.execute(
-                        "INSERT OR REPLACE INTO cell_roads (cell_key, lat, lng, found) "
-                        "VALUES (?,?,?,1)", (k, hit[0], hit[1]))
-                    out[k] = [hit[0], hit[1]]
-                else:
-                    conn.execute(
-                        "INSERT OR REPLACE INTO cell_roads (cell_key, lat, lng, found) "
-                        "VALUES (?,NULL,NULL,0)", (k,))
-                    out[k] = None
-                    log.info("keine Straße in Zelle %s", k)
+                conn.execute(
+                    "INSERT OR REPLACE INTO cell_roads (cell_key, lat, lng, found) "
+                    "VALUES (?,NULL,NULL,0)", (k,))
+                out[k] = None
+                log.info("keine Straße in Zelle %s", k)
     return out
