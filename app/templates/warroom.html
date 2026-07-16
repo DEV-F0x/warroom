@@ -179,17 +179,7 @@
   </div>
 
   <div class="tabc" data-tabc="info" hidden>
-    <div class="info-grid">
-      <div><span>{{ t('info_you') }}</span><b>{{ meta.username }}</b></div>
-      <div><span>{{ t('info_wifi_ble') }}</span><b>{{ (stats.wifi if stats else 0) | n }} / {{ (stats.ble if stats else 0) | n }}</b></div>
-      <div><span>{{ t('info_7d') }}</span><b>{{ (stats.recent_7d if stats else 0) | n }}</b></div>
-      <div><span>{{ t('info_gang') }}</span><b>{{ meta.gang }} · #{{ stats.gang_rank if stats else '—' }}</b></div>
-      <div><span>{{ t('info_points') }}</span><b>{{ (stats.gang_points if stats else 0) | n }}</b></div>
-      <div><span>{{ t('info_team_cl') }}</span><b>{{ (stats.team_captured if stats else 0) | n }} / {{ (stats.team_lost if stats else 0) | n }}</b></div>
-      <div><span>{{ t('info_turf') }}</span><b>{{ meta.footprint_cells }} {{ t('cells_word') }}</b></div>
-      <div><span>{{ t('info_last_poll') }}</span><b>{{ meta.last_poll | localtime }}</b></div>
-      <div><span>{{ t('info_users') }}</span><b>{{ user_count }} / {{ max_users }}</b></div>
-    </div>
+    <div class="info-grid" id="info-grid">{% include "_info_grid.html" %}</div>
     <h3 class="pl-sub">{{ t('chart_head') }}</h3>
     <div id="charts" class="charts"><p class="hint">{{ t('chart_none') }}</p></div>
 
@@ -609,6 +599,9 @@ document.addEventListener('DOMContentLoaded', function () {
       .then(function (d) {
         if (!d) return;
         POLL_EPOCH = d.poll;
+
+        var ig = document.getElementById('info-grid');
+        if (ig && d.info_html != null) ig.innerHTML = d.info_html;
 
         var wb = document.getElementById('watcher-body');
         if (wb && d.watcher_html != null) wb.innerHTML = d.watcher_html;

@@ -441,6 +441,11 @@ def live(request: Request, conn: sqlite3.Connection = Depends(get_db),
         "n_ahead": sum(1 for p in pl if p["gap"] == 0),
         "n_free": sum(1 for t in _targets if t["t"] == "free"),
         "n_virgin": len(_virgin) // 2,
+        # For the info-grid fragment — these change every poll (last_poll, turf cell
+        # count, stats) or when someone registers (user_count), but weren't refreshed
+        # in-place before, so the info tab only updated on a full page reload.
+        "meta": queries.meta(conn, user), "stats": queries.latest_stats(conn, uid),
+        "user_count": conn.execute("SELECT COUNT(*) FROM users").fetchone()[0],
     }
     env = web.templates.env
     return JSONResponse({
@@ -452,6 +457,7 @@ def live(request: Request, conn: sqlite3.Connection = Depends(get_db),
         "events_n": len(ctx["events"]),
         "watcher_html": env.get_template("_watcher_body.html").render(**ctx),
         "planner_html": env.get_template("_planner_body.html").render(**ctx),
+        "info_html": env.get_template("_info_grid.html").render(**ctx),
     })
 
 
