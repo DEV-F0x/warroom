@@ -82,13 +82,6 @@
 </div>
 
 <div class="panel">
-  <div class="tabs">
-    <button class="tab active" data-tab="planer">{{ t('tab_planner') }}</button>
-    <button class="tab" data-tab="waechter">{{ t('tab_watcher') }} <span class="badge" id="watch-badge" {% if not events %}hidden{% endif %}>{{ events | length }}</span></button>
-    <button class="tab" data-tab="friends">{{ t('tab_friends') }}{% if friends.incoming %} <span class="badge">{{ friends.incoming | length }}</span>{% endif %}</button>
-    <button class="tab" data-tab="info">{{ t('tab_info') }}</button>
-  </div>
-
   <div class="tabc" data-tabc="planer">
     <div class="tour-panel" id="tour-panel" hidden>
       <div class="tour-headrow"><b>{{ t('tour_head') }}</b><span class="tour-count" id="tour-count"></span></div>
@@ -219,6 +212,16 @@
       <input type="password" name="password" placeholder="{{ t('pw_old') }}" required autocomplete="current-password">
       <button class="rb-jump stop" type="submit">{{ t('del_btn') }}</button>
     </form>
+  </div>
+
+  {# Tab bar at the BOTTOM of the panel (thumb zone, UI redesign step 3) — same
+     buttons/badges, same .tab[data-tab]/.tabc[data-tabc] switching + #watch-badge,
+     pure markup relocation. #}
+  <div class="tabs">
+    <button class="tab active" data-tab="planer">{{ t('tab_planner') }}</button>
+    <button class="tab" data-tab="waechter">{{ t('tab_watcher') }} <span class="badge" id="watch-badge" {% if not events %}hidden{% endif %}>{{ events | length }}</span></button>
+    <button class="tab" data-tab="friends">{{ t('tab_friends') }}{% if friends.incoming %} <span class="badge">{{ friends.incoming | length }}</span>{% endif %}</button>
+    <button class="tab" data-tab="info">{{ t('tab_info') }}</button>
   </div>
 </div>
 

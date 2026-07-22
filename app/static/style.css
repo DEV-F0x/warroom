@@ -406,22 +406,29 @@ path.cell-picked {
   border-top: 1px solid var(--edge);
   box-shadow: 0 -1px 0 rgba(232, 182, 76, 0.14);
   min-height: 0;
-  /* safe-area: keep panel content above the iPhone home indicator */
+}
+/* Bottom tab bar (thumb zone): last child of the panel column, so it pins to the
+   bottom above the scrollable .tabc. Safe-area padding lives HERE now so the bar's
+   background fills down to the screen edge and labels sit above the home indicator. */
+.tabs {
+  display: flex; flex: 0 0 auto; order: 2;
+  border-top: 1px solid var(--line); background: var(--panel2);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-.tabs { display: flex; flex: 0 0 auto; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .tab {
   position: relative;
-  flex: 1; background: none; border: 0; color: var(--muted); cursor: pointer;
-  padding: 0.55rem 0.3rem 0.5rem;
+  flex: 1; min-height: 44px;  /* thumb target */
+  display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  padding: 0.5rem 0.3rem;
   font-family: var(--display); font-weight: 400; font-size: 0.86rem;
   letter-spacing: 0.09em; text-transform: uppercase;
-  border-bottom: 2px solid transparent;
+  border-top: 2px solid transparent;  /* active indicator now on top edge */
 }
 .tab:hover { color: var(--text); }
-.tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab.active { color: var(--gold); border-top-color: var(--gold); }
 .tab.active::after {
-  content: ""; position: absolute; left: 50%; bottom: -4px;
+  content: ""; position: absolute; left: 50%; top: -4px;
   width: 6px; height: 6px; transform: translateX(-50%) rotate(45deg);
   background: var(--gold);
 }
