@@ -48,6 +48,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // banner — see the InfoCtl control below. Links stay one tap away (OSM requires
   // accessible attribution), they just don't cover the map corner all the time.
   var map = L.map('map', {zoomControl: true, zoomSnap: 0.5, attributionControl: false}).setView([50, -20], 3);
+  // Map controls live in a right-edge column (UI redesign step 5): thumb reach, and
+  // Leaflet's bottom-right corner sits at the map's bottom edge = right above the
+  // sheet, so the buttons stay reachable as the sheet is dragged.
+  map.zoomControl.setPosition('bottomright');
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18
   }).addTo(map);
@@ -532,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (ringsOn) renderRings();   // rings follow the moving GPS position
   }
   function onPosErr() { here.hidden = false; here.className = 'here-banner out'; here.innerHTML = T.no_gps; }
-  var LocateCtl = L.Control.extend({options: {position: 'topleft'}, onAdd: function () {
+  var LocateCtl = L.Control.extend({options: {position: 'bottomright'}, onAdd: function () {
     var d = L.DomUtil.create('div', 'leaflet-bar locate-ctl');
     d.innerHTML = '<a href="#" id="loc-btn" title="Follow" role="button">◎</a>';
     L.DomEvent.disableClickPropagation(d);
@@ -557,7 +561,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ---- Manual location: drag the map under the centre crosshair, confirm ----
   // For planning from the couch or when GPS is off/indoors. Sets the same meMarker
   // that GPS would, so the here-banner, planner distances and tour guidance all use it.
-  var SetLocCtl = L.Control.extend({options: {position: 'topleft'}, onAdd: function () {
+  var SetLocCtl = L.Control.extend({options: {position: 'bottomright'}, onAdd: function () {
     var d = L.DomUtil.create('div', 'leaflet-bar locate-ctl');
     d.innerHTML = '<a href="#" id="setloc-btn" title="' + esc(T.loc_set_title) + '" role="button">⌖</a>';
     L.DomEvent.disableClickPropagation(d);

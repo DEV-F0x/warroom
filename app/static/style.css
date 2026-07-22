@@ -193,6 +193,7 @@ a.rb-jump { text-decoration: none; display: inline-flex; align-items: center; }
 /* Keep Leaflet controls clear of the HUD brackets */
 .stage .leaflet-top .leaflet-control { margin-top: 16px; }
 .stage .leaflet-left .leaflet-control { margin-left: 16px; }
+.stage .leaflet-right .leaflet-control { margin-right: 14px; }   /* right-edge control column */
 .stage .leaflet-bottom .leaflet-control { margin-bottom: 12px; }
 
 /* "you are here" banner: field plate instead of a pill */
@@ -382,6 +383,8 @@ path.cell-picked {
   background: var(--panel) !important; color: var(--text) !important;
   border-bottom: 1px solid var(--line) !important;
   border-radius: 0 !important;
+  /* 44px thumb targets (leaflet.css defaults to 26px and loads after us → !important) */
+  width: 44px !important; height: 44px !important; line-height: 44px !important;
 }
 .leaflet-bar a:last-child { border-bottom: 0 !important; }
 .leaflet-bar a:hover { background: var(--iron) !important; color: var(--gold) !important; }
