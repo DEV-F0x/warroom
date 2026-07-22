@@ -323,6 +323,7 @@ path.cell-picked {
   background: linear-gradient(180deg, var(--gold-bright), #d3a037); color: #191204;
   font-weight: 800; letter-spacing: 0.02em;
 }
+.nav-banner[hidden] { display: none; }   /* display:flex above beats [hidden]{display:none} — MUST restore it */
 .nav-banner.done { background: linear-gradient(180deg, #ffe9ad, var(--gold)); color: #191204; }
 .nav-body {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 0.5rem;
