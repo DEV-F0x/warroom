@@ -66,7 +66,8 @@ body {
 /* ---- Header: iron bar with a gold hairline ---- */
 .top {
   display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
-  padding: 0.45rem 0.8rem;
+  /* safe-area: keep the header out of the notch (viewport-fit=cover is set) */
+  padding: calc(0.45rem + env(safe-area-inset-top, 0px)) 0.8rem 0.45rem;
   background-color: var(--panel2);
   background-image: var(--grain), linear-gradient(180deg, #121826, var(--panel2));
   border-bottom: 1px solid var(--line);
@@ -100,15 +101,26 @@ body {
 .chip.gold { color: var(--gold); border-color: var(--gold-dim); }
 .chip.gold b { color: var(--gold); }
 
-/* ---- Turf bar: situation strip ---- */
+/* ---- Turf bar: situation strip ----
+   One horizontally scrolling rail (same trick as .pl-chips): never wraps, so its
+   height is data-independent — 10 theatres cost sideways scroll, not map pixels.
+   A right-edge mask fade signals there is more to scroll. */
 .revier-bar {
-  display: flex; flex-direction: column; align-items: stretch; gap: 0.4rem;
+  display: flex; align-items: center;
   padding: 0.42rem 0.8rem; background: var(--panel2);
   border-bottom: 1px solid var(--line);
-  flex: 0 0 auto; font-size: 0.8rem;
+  flex: 0 0 auto; font-size: 0.8rem; min-width: 0;
 }
-.rb-counts, .rb-jumps { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
-.rb-jumps { gap: 0.4rem; }
+.rb-rail {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 0.5rem;
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto; min-width: 0;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent);
+}
+.rb-rail::-webkit-scrollbar { display: none; }
+.rb-rail > * { flex: 0 0 auto; }
+.rb-sep { width: 1px; align-self: stretch; background: var(--edge); margin: 0 0.15rem; }
 .rb {
   display: inline-flex; align-items: center; gap: 0.38rem; color: var(--muted);
   white-space: nowrap; font-size: 0.74rem; letter-spacing: 0.05em; text-transform: uppercase;
@@ -394,6 +406,8 @@ path.cell-picked {
   border-top: 1px solid var(--edge);
   box-shadow: 0 -1px 0 rgba(232, 182, 76, 0.14);
   min-height: 0;
+  /* safe-area: keep panel content above the iPhone home indicator */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .tabs { display: flex; flex: 0 0 auto; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .tab {

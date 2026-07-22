@@ -22,18 +22,21 @@
   </div>
 </header>
 
+{# ONE horizontally scrolling rail (UI redesign step 1): counts + jumps + layer
+   chips share a single row that scrolls sideways instead of wrapping downward —
+   chrome height no longer grows with the number of theatres, the map keeps the
+   space. Layer chips live OUTSIDE the theatres guard so no-theatre users get
+   them too (virgin still needs data; rings only needs a position). #}
 <div class="revier-bar">
-  <div class="rb-counts">
+  <div class="rb-rail">
     <span class="rb mine"><b>{{ counts.mine }}</b> {{ t('mine') }}</span>
     <span class="rb enemy"><b>{{ counts.enemy }}</b> {{ t('enemy') }}</span>
     <span class="rb free"><b>{{ counts.free }}</b> {{ t('free') }}</span>
-  </div>
-  {% if theatres %}
-  <div class="rb-jumps">
+    <span class="rb-sep" aria-hidden="true"></span>
     {% for th in theatres %}
     <button class="rb-jump" data-b="{{ th.bounds | tojson }}">{{ t(th.key) }} · {{ th.n }}</button>
     {% endfor %}
-    <button class="rb-jump" id="jump-all">{{ t('all') }}</button>
+    {% if theatres %}<button class="rb-jump" id="jump-all">{{ t('all') }}</button>{% endif %}
     {% if virgin_all %}
     <button class="rb-jump layer-chip" data-layer="virgin" title="{{ t('virgin_count', n=(virgin_all | length)) }}">
       ◇ {{ t('virgin_layer') }} · {{ virgin_all | length }}
@@ -41,7 +44,6 @@
     {% endif %}
     <button class="rb-jump layer-chip" data-layer="rings">⊚ {{ t('rings_layer') }}</button>
   </div>
-  {% endif %}
 </div>
 
 {% if not meta.terr_init %}
