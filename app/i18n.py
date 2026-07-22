@@ -354,6 +354,20 @@ JS = {
     "nm_target": {"en": "Nearest target", "de": "Nächstes Ziel"},
     "nm_free": {"en": "Free cell", "de": "Freie Zelle"},
     "nm_attack": {"en": "Turf under attack", "de": "Revier unter Beschuss"},
+    # Layers popover (◈ control) + coverage brush (all client-rendered)
+    "layers_title": {"en": "Map layers", "de": "Kartenebenen"},
+    "lyr_virgin": {"en": "Virgin land", "de": "Neuland"},
+    "lyr_rings": {"en": "Distance rings", "de": "Distanzringe"},
+    "lyr_cov": {"en": "Coverage", "de": "Abdeckung"},
+    "cov_radius": {"en": "Reception radius", "de": "Empfangsradius"},
+    "cov_rec": {"en": "Record", "de": "Aufnahme"},
+    "cov_stop": {"en": "Stop", "de": "Stopp"},
+    "cov_clear": {"en": "Clear", "de": "Leeren"},
+    "cov_clear_ask": {"en": "Delete all coverage data?", "de": "Alle Abdeckungsdaten löschen?"},
+    "cov_need_gps": {"en": "Recording needs GPS — start follow (◎) first",
+                     "de": "Aufnahme braucht GPS — erst Follow (◎) starten"},
+    "cov_started": {"en": "Coverage recording — brushing your path",
+                    "de": "Abdeckung wird aufgenommen — dein Weg wird gemalt"},
 }
 
 

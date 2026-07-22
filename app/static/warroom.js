@@ -170,14 +170,14 @@ document.addEventListener('DOMContentLoaded', function () {
         .addTo(virginLayer);
     });
   }
-  document.querySelectorAll('.layer-chip[data-layer="virgin"]').forEach(function (chip) {
-    chip.addEventListener('click', function () {
-      virginOn = !virginOn;
-      chip.classList.toggle('on', virginOn);
-      if (virginOn) { virginLayer.addTo(map); renderVirgin(); snapVirginWater(); }
-      else { virginLayer.clearLayers(); map.removeLayer(virginLayer); }
-    });
-  });
+  // Toggle called from the ◈ layers popover (built further below). The popover row
+  // reflects state via reflectLayers(); no rail chip owns this anymore.
+  function toggleVirgin() {
+    virginOn = !virginOn;
+    if (virginOn) { virginLayer.addTo(map); renderVirgin(); snapVirginWater(); }
+    else { virginLayer.clearLayers(); map.removeLayer(virginLayer); }
+    if (typeof reflectLayers === 'function') reflectLayers();
+  }
   // Virgin cells sit purely on geometry, so some land in lakes/rivers (Lake Erie).
   // Snap the nearest ones to a road via /api/snap; cells with no drivable road
   // (water/forest) come back null → drop them from virginCells. This runs once on load
@@ -543,6 +543,7 @@ document.addEventListener('DOMContentLoaded', function () {
     plOnPosition();  // keep distances updated; re-sorting only throttled
     if (ringsOn) renderRings();   // rings follow the moving GPS position
     if (nextmoveOn) renderNextmove();
+    if (recOn) covRecord(lat, lng, acc);   // brush the covered ground while recording
   }
   function onPosErr() {
     if (guidanceOn) return;   // the nav strip owns the bottom slot; don't flash a GPS-error banner over it
@@ -666,19 +667,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
   map.on('zoomend', renderRings);   // cheap: 4 circles + 4 labels, no need to diff the step
-  document.querySelectorAll('.layer-chip[data-layer="rings"]').forEach(function (chip) {
-    chip.addEventListener('click', function () {
-      if (!ringsOn && !myPos()) {   // no position yet → explain instead of a dead toggle
-        here.hidden = false; here.className = 'here-banner out'; here.innerHTML = T.rings_need_pos;
-        setTimeout(function () { if (!myPos()) here.hidden = true; }, 3000);
-        return;
-      }
-      ringsOn = !ringsOn;
-      chip.classList.toggle('on', ringsOn);
-      if (ringsOn) { ringLayer.addTo(map); renderRings(); }
-      else { ringLayer.clearLayers(); map.removeLayer(ringLayer); }
-    });
-  });
+  // Toggle called from the ◈ layers popover. Needs a position to center on.
+  function toggleRings() {
+    if (!ringsOn && !myPos()) {   // no position yet → explain instead of a dead toggle
+      here.hidden = false; here.className = 'here-banner out'; here.innerHTML = T.rings_need_pos;
+      setTimeout(function () { if (!myPos()) here.hidden = true; }, 3000);
+      return;
+    }
+    ringsOn = !ringsOn;
+    if (ringsOn) { ringLayer.addTo(map); renderRings(); }
+    else { ringLayer.clearLayers(); map.removeLayer(ringLayer); }
+    if (typeof reflectLayers === 'function') reflectLayers();
+  }
 
   // ---- "Next move" card (step 11, opt-in via the ⚡ rail toggle) ----
   // One suggested next action in the bottom slot when no tour navigation runs:
@@ -743,6 +743,173 @@ document.addEventListener('DOMContentLoaded', function () {
     if (nmBody.dataset.lat) jumpToEvent(+nmBody.dataset.lat, +nmBody.dataset.lng);
   });
   if (nmSkip) nmSkip.addEventListener('click', function () { nmIdx++; renderNextmove(); });
+
+  // ---- Coverage brush: log the ground actually driven, not just cells with APs ----
+  // While recording, each GPS fix drops a disc of the operator's expected reception
+  // radius; the union of discs is a live brush stroke of covered ground. Discs are
+  // geographic L.circle on a dedicated canvas renderer, so they auto-scale with zoom
+  // and thousands stay cheap. Points are buffered to localStorage and flushed to
+  // /coverage in batches — wardriving means dead zones, so a failed POST just waits.
+  var COV_RADII = [50, 100, 150, 200, 300];   // metres; cycle in the popover
+  var COV_COL = {gps: '#2ee6a6', ap: '#5aa9e6'};   // gps = driven; ap = future backfill
+  var COV_OP = {gps: 0.16, ap: 0.10};
+  var covRenderer = L.canvas({padding: 0.5});
+  var covGroup = L.layerGroup();
+  var covOn = false, recOn = false, covFlushing = false;
+  var covPts = [], covQueue = [], covLast = null, recRadius = 100;
+  var hasVirgin = !!(DATA.virginAll && DATA.virginAll.length);
+  try { var rr = parseInt(localStorage.getItem('wr_cov_radius'), 10); if (rr) recRadius = rr; } catch (e) {}
+  try { covQueue = JSON.parse(localStorage.getItem('wr_cov_queue') || '[]') || []; } catch (e) { covQueue = []; }
+
+  function fmtRadius(m) {
+    return units === 'mi' ? (Math.round(m * 3.28084 / 10) * 10) + ' ft' : m + ' m';
+  }
+  function addCovDisc(p) {
+    var src = p.src || 'gps';
+    L.circle([p.lat, p.lng], {radius: p.r, stroke: false, fillColor: COV_COL[src] || COV_COL.gps,
+      fillOpacity: COV_OP[src] || COV_OP.gps, interactive: false, renderer: covRenderer}).addTo(covGroup);
+  }
+  function renderCoverage() {
+    covGroup.clearLayers();
+    if (!covOn) return;
+    covPts.forEach(addCovDisc);
+  }
+  function toggleCoverage() {
+    covOn = !covOn;
+    if (covOn) { covGroup.addTo(map); renderCoverage(); }
+    else { covGroup.clearLayers(); map.removeLayer(covGroup); }
+    reflectLayers();
+  }
+
+  function covPersist() {
+    try { localStorage.setItem('wr_cov_queue', JSON.stringify(covQueue)); } catch (e) {}
+  }
+  function covFlush() {
+    if (covFlushing || !covQueue.length) return;
+    covFlushing = true;
+    var batch = covQueue.slice(0, 500);
+    fetch('/coverage', {method: 'POST', headers: {'Content-Type': 'application/json',
+      'X-Requested-With': 'fetch'}, body: JSON.stringify({pts: batch})})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (res) {
+        if (res && res.ok) { covQueue.splice(0, batch.length); covPersist(); }
+      }).catch(function () {}).finally(function () { covFlushing = false; });
+  }
+  // Called from onPos on every GPS fix while recording. Throttled by distance so a
+  // parked car doesn't pile up discs on one spot; wild fixes (poor accuracy) are dropped.
+  function covRecord(lat, lng, acc) {
+    if (acc > 0 && acc > 150) return;
+    var here = {lat: lat, lng: lng};
+    if (covLast && hav(covLast, here) * 1000 < recRadius / 2) return;   // hav → km
+    covLast = here;
+    var p = {lat: lat, lng: lng, r: recRadius, src: 'gps', t: new Date().toISOString()};
+    covPts.push(p); covQueue.push(p); covPersist();
+    if (covOn) addCovDisc(p);
+    if (covQueue.length % 20 === 0) covFlush();   // trickle to the server; no-op when offline
+  }
+  var recPill = document.getElementById('rec-pill');
+  function reflectRec() {
+    if (recPill) recPill.hidden = !recOn;
+    var btn = document.getElementById('cov-rec');
+    if (btn) { btn.textContent = (recOn ? '■ ' + T.cov_stop : '● ' + T.cov_rec); btn.classList.toggle('on', recOn); }
+    var lb = document.getElementById('layers-btn');
+    if (lb) lb.classList.toggle('recording', recOn);
+  }
+  function recStart() {
+    if (!navigator.geolocation) { toast('<b>' + esc(T.cov_need_gps) + '</b>', 4000); return; }
+    if (!watchId) {   // recording implies GPS follow — start it like the ◎ button does
+      watchId = navigator.geolocation.watchPosition(onPos, onPosErr,
+        {enableHighAccuracy: true, maximumAge: 5000, timeout: 15000});
+      follow = true; var lb = document.getElementById('loc-btn'); if (lb) lb.classList.add('active');
+    }
+    recOn = true; covLast = null;
+    if (!covOn) toggleCoverage();   // show the brush as it grows
+    reflectRec();
+    toast('<b>' + esc(T.cov_started) + '</b>', 3500);
+  }
+  function recStop() { recOn = false; reflectRec(); covFlush(); }
+  if (recPill) recPill.addEventListener('click', recStop);
+
+  // ◈ layers control: virgin / distance rings / coverage moved off the rail into one
+  // popover on the map's control column (bottom-right, next to zoom/locate/info).
+  var LayersCtl = L.Control.extend({options: {position: 'bottomright'}, onAdd: function () {
+    var d = L.DomUtil.create('div', 'leaflet-bar layers-ctl');
+    var rows = '';
+    if (hasVirgin) rows += '<button type="button" class="lyr-row" data-layer="virgin">' +
+      '<span class="lyr-ic">◇</span>' + esc(T.lyr_virgin) + '</button>';
+    rows += '<button type="button" class="lyr-row" data-layer="rings">' +
+      '<span class="lyr-ic">⊚</span>' + esc(T.lyr_rings) + '</button>';
+    rows += '<div class="lyr-sep"></div>' +
+      '<button type="button" class="lyr-row" data-layer="cov"><span class="lyr-ic">▨</span>' + esc(T.lyr_cov) + '</button>' +
+      '<div class="cov-ctrls">' +
+        '<div class="cov-line"><span>' + esc(T.cov_radius) + '</span>' +
+          '<button type="button" class="cov-radius" id="cov-radius">' + fmtRadius(recRadius) + '</button></div>' +
+        '<div class="cov-line"><button type="button" class="cov-rec" id="cov-rec">● ' + esc(T.cov_rec) + '</button>' +
+          '<button type="button" class="cov-clear" id="cov-clear">↺ ' + esc(T.cov_clear) + '</button></div>' +
+      '</div>';
+    d.innerHTML = '<div id="layers-box" class="layers-box" hidden>' +
+      '<div class="layers-head">' + esc(T.layers_title) + '</div>' + rows + '</div>' +
+      '<a href="#" id="layers-btn" role="button" title="' + esc(T.layers_title) + '">&#9672;</a>';
+    L.DomEvent.disableClickPropagation(d);
+    L.DomEvent.disableScrollPropagation(d);
+    return d;
+  }});
+  map.addControl(new LayersCtl());
+  function reflectLayers() {
+    var box = document.getElementById('layers-box');
+    if (!box) return;
+    var st = {virgin: virginOn, rings: ringsOn, cov: covOn};
+    box.querySelectorAll('.lyr-row').forEach(function (row) {
+      row.classList.toggle('on', !!st[row.dataset.layer]);
+    });
+    var rb = document.getElementById('cov-radius'); if (rb) rb.textContent = fmtRadius(recRadius);
+    reflectRec();
+  }
+  document.getElementById('layers-btn').addEventListener('click', function (e) {
+    e.preventDefault();
+    var b = document.getElementById('layers-box');
+    b.hidden = !b.hidden;
+    if (!b.hidden) reflectLayers();
+  });
+  map.on('click', function () {
+    var b = document.getElementById('layers-box');
+    if (b && !b.hidden) b.hidden = true;
+  });
+  document.querySelectorAll('.lyr-row').forEach(function (row) {
+    row.addEventListener('click', function () {
+      var l = row.dataset.layer;
+      if (l === 'virgin') toggleVirgin();
+      else if (l === 'rings') toggleRings();
+      else if (l === 'cov') toggleCoverage();
+    });
+  });
+  document.getElementById('cov-radius').addEventListener('click', function () {
+    var i = COV_RADII.indexOf(recRadius);
+    recRadius = COV_RADII[(i + 1) % COV_RADII.length];
+    try { localStorage.setItem('wr_cov_radius', String(recRadius)); } catch (e) {}
+    this.textContent = fmtRadius(recRadius);
+  });
+  document.getElementById('cov-rec').addEventListener('click', function () {
+    if (recOn) recStop(); else recStart();
+  });
+  document.getElementById('cov-clear').addEventListener('click', function () {
+    if (!window.confirm(T.cov_clear_ask)) return;
+    fetch('/coverage/clear', {method: 'POST', headers: {'X-Requested-With': 'fetch'}})
+      .then(function () {
+        covPts = []; covQueue = []; covLast = null; covPersist(); renderCoverage();
+      }).catch(function () {});
+  });
+
+  // Load stored coverage; seed the render buffer with any unflushed local points so a
+  // reload mid-drive doesn't lose the tail, then flush the leftover queue.
+  fetch('/coverage.json', {headers: {'X-Requested-With': 'fetch'}})
+    .then(function (r) { return r.ok ? r.json() : {pts: []}; })
+    .then(function (d) {
+      covPts = (d.pts || []).concat(covQueue);
+      if (covOn) renderCoverage();
+    }).catch(function () {});
+  covFlush();
+  setInterval(covFlush, 30000);
 
   // ---- Crew: friends' live positions (12s poll) + own push while sharing ----
   var friendLayer = L.layerGroup().addTo(map);

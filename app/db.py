@@ -93,6 +93,20 @@ CREATE TABLE IF NOT EXISTS cell_roads (
     found INTEGER NOT NULL DEFAULT 0,
     ts   TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Coverage brush: GPS breadcrumbs logged while wardriving. Each point carries the
+-- operator's expected reception radius, so the union of the discs is the ground truly
+-- covered — not just cells that happened to hold an AP. Point-based (not polygons) so
+-- the radius stays honest per point, and the same table later absorbs the wdgwars-AP
+-- backfill as src='ap'. Private per user; cascades on account delete.
+CREATE TABLE IF NOT EXISTS coverage_pts (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    lat REAL NOT NULL, lng REAL NOT NULL,
+    radius_m INTEGER NOT NULL,
+    src      TEXT NOT NULL DEFAULT 'gps',   -- gps | ap (historical backfill)
+    ts       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_coverage_user ON coverage_pts(user_id, id);
 -- Web push: one row per device (endpoint). lang = language of the device at subscribe time.
 CREATE TABLE IF NOT EXISTS push_subs (
     endpoint   TEXT PRIMARY KEY,

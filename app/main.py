@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, config, db, i18n, poller, push, queries, roads, social, web
+from . import auth, config, coverage, db, i18n, poller, push, queries, roads, social, web
 from .security import SecurityHeadersMiddleware
 from .web import render
 from .wdg import Wdg, WdgError
@@ -340,6 +340,36 @@ def friends_positions(conn: sqlite3.Connection = Depends(get_db), user=Depends(c
                          "last_poll": db.kv_get(conn, "last_poll", "0")})
 
 
+# ---- Coverage brush ----
+@app.post("/coverage")
+async def coverage_add(request: Request, conn: sqlite3.Connection = Depends(get_db),
+                       user=Depends(current_user)):
+    if not user:
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False}, status_code=400)
+    pts = body.get("pts") if isinstance(body, dict) else None
+    if not isinstance(pts, list):
+        return JSONResponse({"ok": False}, status_code=400)
+    return JSONResponse({"ok": True, "stored": coverage.add_points(conn, user["id"], pts)})
+
+
+@app.get("/coverage.json")
+def coverage_get(conn: sqlite3.Connection = Depends(get_db), user=Depends(current_user)):
+    if not user:
+        return JSONResponse({"error": "auth"}, status_code=401)
+    return JSONResponse({"pts": coverage.points(conn, user["id"])})
+
+
+@app.post("/coverage/clear")
+def coverage_clear(conn: sqlite3.Connection = Depends(get_db), user=Depends(current_user)):
+    if not user:
+        return JSONResponse({"ok": False}, status_code=401)
+    return JSONResponse({"ok": True, "cleared": coverage.clear(conn, user["id"])})
+
+
 # ---- Account ----
 @app.post("/account/password")
 def change_password(request: Request, old: str = Form(...), new: str = Form(...),
@@ -365,7 +395,7 @@ def delete_account(request: Request, password: str = Form(...),
         return RedirectResponse("/?tab=info&del=err", status_code=303)
     uid = user["id"]
     for tbl in ("footprint_cells", "territory", "events", "stats",
-                "push_subs", "sessions", "positions", "virgin_cells"):
+                "push_subs", "sessions", "positions", "virgin_cells", "coverage_pts"):
         conn.execute(f"DELETE FROM {tbl} WHERE user_id = ?", (uid,))
     conn.execute("DELETE FROM friends WHERE user_id = ? OR friend_id = ?", (uid, uid))
     conn.execute("DELETE FROM users WHERE id = ?", (uid,))

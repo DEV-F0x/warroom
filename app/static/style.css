@@ -36,6 +36,7 @@
   --enemy-hot: #ff8d92;
   --free: #5f7789;
   --frost: #8fa7bd;
+  --cov: #2ee6a6;
   /* Fonts */
   --display: "Germania One", "Arial Black", "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
@@ -604,6 +605,59 @@ body.wr-setloc .stage { grid-column: 1 / -1; }
 }
 .attrib-box a { color: var(--frost); }
 .attrib-box[hidden] { display: none; }  /* the usual [hidden]-vs-display trap */
+
+/* ◈ layers popover (bottom-right control column): virgin / rings / coverage toggles,
+   moved off the rail. Opens to the left like the ⓘ credits box. */
+.layers-ctl { position: relative; }
+#layers-btn.recording { color: var(--enemy-hot) !important; }
+/* Opens DOWNWARD (top:0), not up: Leaflet prepends bottom-corner controls, so this
+   last-added ◈ sits at the TOP of the bottom-right column — the room is below it. */
+.layers-box {
+  position: absolute; right: calc(100% + 8px); top: 0;
+  background: rgba(10, 14, 18, 0.95); border: 1px solid var(--line);
+  border-radius: 5px; padding: 0.4rem; width: 190px;
+  max-height: 62vh; overflow-y: auto;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+}
+.layers-box[hidden] { display: none; }  /* the usual [hidden]-vs-display trap */
+.layers-head {
+  font: 600 0.62rem/1 var(--mono); letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--muted); padding: 0.1rem 0.25rem 0.35rem;
+}
+.lyr-row {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%;
+  background: transparent; border: 1px solid transparent; border-radius: 4px;
+  padding: 0.42rem 0.4rem; margin: 0; color: var(--text);
+  font: 0.78rem/1 var(--sans); text-align: left; cursor: pointer;
+}
+.lyr-row:hover { background: var(--iron); }
+.lyr-row .lyr-ic { width: 1.1em; text-align: center; color: var(--muted); }
+.lyr-row.on { border-color: var(--frost); color: var(--frost); background: rgba(143, 167, 189, 0.12); }
+.lyr-row[data-layer="cov"].on { border-color: var(--cov); color: var(--cov); background: rgba(46, 230, 166, 0.12); }
+.lyr-row.on .lyr-ic { color: inherit; }
+.lyr-sep { height: 1px; background: var(--line); margin: 0.3rem 0.15rem; }
+/* Coverage sub-controls (radius picker + record/clear) under the coverage row */
+.cov-ctrls { padding: 0.15rem 0.25rem 0.1rem; }
+.cov-line {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+  margin-top: 0.3rem; font-size: 0.72rem; color: var(--muted);
+}
+.cov-radius, .cov-rec, .cov-clear {
+  background: var(--panel2); border: 1px solid var(--edge); border-radius: 4px;
+  color: var(--text); font: 0.72rem/1 var(--mono); padding: 0.34rem 0.5rem; cursor: pointer;
+}
+.cov-rec { flex: 1; color: var(--cov); border-color: rgba(46, 230, 166, 0.4); }
+.cov-rec.on { color: #fff; background: var(--enemy); border-color: var(--enemy); }
+.cov-clear { color: var(--enemy-hot); border-color: rgba(214, 59, 65, 0.4); }
+.cov-radius:hover, .cov-rec:hover, .cov-clear:hover { filter: brightness(1.15); }
+
+/* Live recording pill in the rail — pulses red, hidden unless a drive is logged */
+.rb-jump.rec-pill {
+  color: #fff; background: var(--enemy); border-color: var(--enemy);
+  font-weight: 700; animation: rec-pulse 1.4s ease-in-out infinite;
+}
+.rb-jump.rec-pill[hidden] { display: none; }
+@keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
 /* Distance-ring labels (radar layer): small tag at each ring's north point.
    Near-white like the rings — gold vanished on top of gold own-cells. */

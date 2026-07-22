@@ -34,13 +34,13 @@
     <button class="rb-jump" data-b="{{ th.bounds | tojson }}">{{ t(th.key) }} · {{ th.n }}</button>
     {% endfor %}
     {% if theatres %}<button class="rb-jump" id="jump-all">{{ t('all') }}</button>{% endif %}
-    {% if virgin_all %}
-    <button class="rb-jump layer-chip" data-layer="virgin" title="{{ t('virgin_count', n=(virgin_all | length)) }}">
-      ◇ {{ t('virgin_layer') }} · {{ virgin_all | length }}
-    </button>
-    {% endif %}
-    <button class="rb-jump layer-chip" data-layer="rings">⊚ {{ t('rings_layer') }}</button>
+    {# Layer toggles (virgin / distance rings / coverage) moved off the rail into the
+       ◈ layers popover on the map's control column — the rail stays a status/jump
+       strip and new layers cost a popover row, not rail width. #}
     <button class="rb-jump layer-chip" id="nextmove-toggle">⚡ {{ t('nextmove') }}</button>
+    {# Live coverage recording indicator: hidden unless a drive is being logged;
+       tapping it stops the recording from the thumb zone. #}
+    <button class="rb-jump rec-pill" id="rec-pill" hidden>● REC</button>
   </div>
 </div>
 
