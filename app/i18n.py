@@ -55,6 +55,7 @@ STRINGS = {
     "sort_easy": {"en": "Easiest first", "de": "Leichteste zuerst"},
     "sort_dist": {"en": "Nearest first", "de": "Nächste zuerst"},
     "sort_aps": {"en": "Most of my APs", "de": "Meiste eigene APs"},
+    "sort_relay": {"en": "Nearest mast cell", "de": "Nächste Mast-Zelle"},
     "flt_all": {"en": "All", "de": "Alle"},
     "flt_ahead": {"en": "Ahead", "de": "Führst"},
     "flt_none": {"en": "Nothing matches this filter.", "de": "Nichts passt zu diesem Filter."},

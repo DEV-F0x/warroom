@@ -371,6 +371,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     var key = plSort === 'dist' ? function (c) { return c._d != null ? c._d : 1e9; }
             : plSort === 'aps' ? function (c) { return -(c.my || 0); }
+            // "Nearest mast cell": relay cells float to the top, nearest first;
+            // everything else follows (still by distance) so the list stays usable.
+            : plSort === 'relay' ? function (c) { return (c.relay ? 0 : 1e12) + (c._d != null ? c._d : 1e9); }
             : plEffort;
     cand.sort(function (a, b) { return key(a) - key(b); });
 
@@ -1049,7 +1052,12 @@ document.addEventListener('DOMContentLoaded', function () {
           pb.innerHTML = d.planner_html;   // only chips + sort field
           // Restore the user's filter/sorting after the swap
           var sel = document.getElementById('pl-sort');
-          if (sel) sel.value = plSort;
+          if (sel) {
+            sel.value = plSort;
+            // the "relay" option is only rendered while mast cells exist — if it
+            // just vanished, the select falls back and plSort must follow it
+            if (sel.value !== plSort) plSort = sel.value || 'dist';
+          }
           var known = false;
           document.querySelectorAll('.pl-chip').forEach(function (c) {
             var same = c.dataset.filter === plFilter.mode &&
